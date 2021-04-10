@@ -10,6 +10,9 @@ use predicates::boolean::PredicateBooleanExt;
 use predicates::prelude::predicate::str::{contains, is_empty, similar};
 use tempfile::{Builder, TempDir};
 
+// TODO: Should be 'cache::CACHE_DIR_ENV_VAR'. This requires to have a library crate for the logic.
+static CACHE_DIR_ENV_VAR: &str = "TEALDEER_CACHE_DIR";
+
 struct TestEnv {
     pub cache_dir: TempDir,
     pub config_dir: TempDir,
@@ -76,10 +79,7 @@ impl TestEnv {
         }
         let run = build.run().unwrap();
         let mut cmd = run.command();
-        cmd.env(
-            "TEALDEER_CACHE_DIR",
-            self.cache_dir.path().to_str().unwrap(),
-        );
+        cmd.env(CACHE_DIR_ENV_VAR, self.cache_dir.path().to_str().unwrap());
         cmd.env(
             "TEALDEER_CONFIG_DIR",
             self.config_dir.path().to_str().unwrap(),
@@ -186,6 +186,50 @@ fn test_quiet_old_cache() {
         .assert()
         .success()
         .stderr(contains("The cache hasn't been updated for more than ").not());
+}
+
+#[test]
+fn test_create_cache_directory_path() {
+    let testenv = TestEnv::new();
+    let cache_dir = testenv.cache_dir.path();
+    let internal_cache_dir = cache_dir.join("internal");
+
+    let mut command = testenv.command();
+    command.env(CACHE_DIR_ENV_VAR, internal_cache_dir.to_str().unwrap());
+
+    assert!(!internal_cache_dir.exists());
+
+    command
+        .arg("-u")
+        .assert()
+        .success()
+        .stdout(contains(format!(
+            "Successfully created cache directory path `{}`.",
+            internal_cache_dir.to_str().unwrap()
+        )))
+        .stdout(contains("Successfully updated cache."));
+
+    assert!(internal_cache_dir.is_dir());
+}
+
+#[test]
+fn test_cache_location_not_a_directory() {
+    let testenv = TestEnv::new();
+    let cache_dir = testenv.cache_dir.path();
+    let internal_file = cache_dir.join("internal");
+    File::create(&internal_file).unwrap();
+
+    let mut command = testenv.command();
+    command.env(CACHE_DIR_ENV_VAR, internal_file.to_str().unwrap());
+
+    command
+        .arg("-u")
+        .assert()
+        .failure()
+        .stderr(contains(format!(
+            "Path specified by ${} is not a directory.",
+            CACHE_DIR_ENV_VAR
+        )));
 }
 
 #[test]
