@@ -15,6 +15,10 @@ fn highlight_command<'a>(
     config: &Config,
     parts: &mut Vec<ANSIString<'a>>,
 ) {
+    if command.trim().is_empty() {
+        parts.push(config.style.example_code.paint(example_code));
+        return;
+    }
     let mut code_part_end_pos = 0;
     while let Some(command_start) = example_code[code_part_end_pos..].find(&command) {
         let code_part = &example_code[code_part_end_pos..code_part_end_pos + command_start];
@@ -92,4 +96,19 @@ where
         }
     }
     println!();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_empty_command() {
+        let mut vec = vec![];
+
+        highlight_command("   \t ", "foo", &Config::default(), &mut vec);
+
+        assert_eq!(vec.len(), 1);
+        assert_eq!(ANSIStrings(&vec).to_string(), "foo");
+    }
 }

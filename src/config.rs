@@ -173,7 +173,7 @@ impl RawConfig {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct StyleConfig {
     pub description: Style,
     pub command_name: Style,
@@ -182,19 +182,19 @@ pub struct StyleConfig {
     pub example_variable: Style,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct DisplayConfig {
     pub compact: bool,
     pub use_pager: bool,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct UpdatesConfig {
     pub auto_update: bool,
     pub auto_update_interval: Duration,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct Config {
     pub style: StyleConfig,
     pub display: DisplayConfig,
