@@ -67,3 +67,27 @@ jobs:
       with:
         command: fmt
         args: --all -- --check
+
+  docs:
+    name: build docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: '0.4.4'
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+      - name: Ensure that docs can be built
+        run: cd docs && mdbook build
+      - name: Generate usage string
+        run: cargo run -- --help > docs/src/usage-actual.txt
+      - name: Ensure that usage string is up to date
+        run: diff docs/src/usage{,-actual}.txt

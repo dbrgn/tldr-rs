@@ -14,7 +14,7 @@ _tealdeer()
 			return
 			;;
 		-o|--os)
-			COMPREPLY=( $(compgen -W 'linux osx sunos windows' -- "${cur}") )
+			COMPREPLY=( $(compgen -W 'linux osx macos sunos windows' -- "${cur}") )
 			return
 			;;
 		--color)

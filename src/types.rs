@@ -1,6 +1,7 @@
 //! Shared types used in tealdeer.
 
 use std::fmt;
+use std::str;
 
 use serde_derive::{Deserialize, Serialize};
 
@@ -12,7 +13,6 @@ pub enum OsType {
     OsX,
     SunOs,
     Windows,
-    Other,
 }
 
 impl fmt::Display for OsType {
@@ -22,7 +22,23 @@ impl fmt::Display for OsType {
             Self::OsX => write!(f, "macOS / BSD"),
             Self::SunOs => write!(f, "SunOS"),
             Self::Windows => write!(f, "Windows"),
-            Self::Other => write!(f, "Unknown OS"),
+        }
+    }
+}
+
+impl str::FromStr for OsType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "linux" => Ok(Self::Linux),
+            "osx" | "macos" => Ok(Self::OsX),
+            "sunos" => Ok(Self::SunOs),
+            "windows" => Ok(Self::Windows),
+            other => Err(format!(
+                "Unknown OS: {}. Possible values: linux, macos, osx, sunos, windows",
+                other
+            )),
         }
     }
 }
@@ -33,6 +49,22 @@ pub enum ColorOptions {
     Always,
     Auto,
     Never,
+}
+
+impl str::FromStr for ColorOptions {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "always" => Ok(Self::Always),
+            "auto" => Ok(Self::Auto),
+            "never" => Ok(Self::Never),
+            other => Err(format!(
+                "Unknown color option: {}. Possible values: always, auto, never",
+                other
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]

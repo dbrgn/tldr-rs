@@ -1,0 +1,26 @@
+tealdeer 1.4.1
+Danilo Bargen <mail@dbrgn.ch>
+A fast TLDR client
+
+USAGE:
+    tldr [OPTIONS] [command]...
+
+ARGS:
+    <command>...    The command to show (e.g. `tar` or `git log`)
+
+OPTIONS:
+    -l, --list                   List all commands in the cache
+    -f, --render <render>        Render a specific markdown file
+    -o, --os <os>                Override the operating system [linux, macos, sunos, windows]
+    -L, --language <language>    Override the language
+    -u, --update                 Update the local cache
+    -c, --clear-cache            Clear the local cache
+    -p, --pager                  Use a pager to page output
+    -q, --quiet                  Suppress informational messages
+    -m, --markdown               Display the raw markdown instead of rendering it
+        --show-paths             Show file and directory paths used by tealdeer
+        --config-path            Show config file path
+        --seed-config            Create a basic config
+        --color <color>          Control whether to use color [always, auto, never]
+    -v, --version                Prints the version
+    -h, --help                   Prints help information

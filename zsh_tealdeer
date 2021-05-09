@@ -16,6 +16,7 @@ _tealdeer() {
         "($I -f --render)"{-f,--render}"[Render a specific markdown file]:file:_files"
         "($I -o --os)"{-o,--os}'[Override the operating system]:os:((
             linux
+            macos
             osx
             sunos
             windows
