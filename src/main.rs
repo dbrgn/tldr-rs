@@ -32,16 +32,16 @@ use serde_derive::Deserialize;
 
 mod cache;
 mod config;
-mod dedup;
 mod error;
+pub mod extensions;
 mod formatter;
 mod tokenizer;
 mod types;
 
 use crate::cache::{Cache, PageLookupResult};
 use crate::config::{get_config_dir, get_config_path, make_default_config, Config, MAX_CACHE_AGE};
-use crate::dedup::Dedup;
 use crate::error::TealdeerError::ConfigError;
+use crate::extensions::Dedup;
 use crate::formatter::print_lines;
 use crate::tokenizer::Tokenizer;
 use crate::types::{ColorOptions, OsType};
