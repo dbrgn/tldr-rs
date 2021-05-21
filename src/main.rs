@@ -10,8 +10,9 @@
 
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::similar_names)]
+#![allow(clippy::enum_glob_use)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::similar_names)]
 #![allow(clippy::too_many_lines)]
 
 use std::fs::File;
@@ -100,8 +101,13 @@ fn print_page(
         } else {
             // Create tokenizer and print output
             let mut tokenizer = Tokenizer::new(reader);
-            print_lines(&mut handle, &mut tokenizer, &config)
-                .map_err(|e| format!("Could not write to stdout: {}", e.message()))?;
+            print_lines(
+                &mut handle,
+                &mut tokenizer,
+                &config.style,
+                !config.display.compact,
+            )
+            .map_err(|e| format!("Could not write to stdout: {}", e.message()))?;
         };
     }
 

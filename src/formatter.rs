@@ -1,84 +1,122 @@
 //! Functions related to formatting and printing lines from a `Tokenizer`.
 
-use std::io::{BufRead, Write};
+use std::io::{self, BufRead, Write};
 
-use ansi_term::{ANSIString, ANSIStrings};
 use log::debug;
 
-use crate::config::Config;
+use crate::config::StyleConfig;
 use crate::error::TealdeerError::{self, WriteError};
+use crate::extensions::FindFrom;
 use crate::tokenizer::Tokenizer;
 use crate::types::LineType;
 
-fn highlight_command<'a>(
-    command: &'a str,
-    example_code: &'a str,
-    config: &Config,
-    parts: &mut Vec<ANSIString<'a>>,
-) {
-    let mut code_part_end_pos = 0;
-    while let Some(command_start) = example_code[code_part_end_pos..].find(&command) {
-        let code_part = &example_code[code_part_end_pos..code_part_end_pos + command_start];
-        parts.push(config.style.example_code.paint(code_part));
-        if code_part_end_pos == 0 {
-            // Only highlight command names at the start of the line ...
-            parts.push(config.style.command_name.paint(command));
-        } else {
-            let char_before_command = example_code
-                .chars()
-                .nth(code_part_end_pos + command_start - 1);
-            if char_before_command.filter(|c| c.is_whitespace()).is_some() {
-                // ... or when preceded by a whitespace character.
-                parts.push(config.style.command_name.paint(command));
-            } else {
-                parts.push(config.style.example_code.paint(command));
-            }
-        }
-
-        code_part_end_pos += command_start + command.len();
-    }
-    parts.push(
-        config
-            .style
-            .example_code
-            .paint(&example_code[code_part_end_pos..]),
-    );
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HighlightingSnippet<'a> {
+    CommandName(&'a str),
+    Variable(&'a str),
+    NormalCode(&'a str),
+    Description(&'a str),
+    Text(&'a str),
+    Linebreak,
 }
 
-/// Format and highlight code examples including variables in {{ curly braces }}.
-fn format_code(command: &str, text: &str, config: &Config) -> String {
-    let mut parts = Vec::new();
-    for between_variables in text.split("}}") {
-        if let Some(variable_start) = between_variables.find("{{") {
-            let example_code = &between_variables[..variable_start];
-            let example_variable = &between_variables[variable_start + 2..];
+impl<'a> HighlightingSnippet<'a> {
+    pub fn is_empty(&self) -> bool {
+        use HighlightingSnippet::*;
 
-            highlight_command(&command, &example_code, &config, &mut parts);
-            parts.push(config.style.example_variable.paint(example_variable));
-        } else {
-            highlight_command(&command, &between_variables, &config, &mut parts);
+        match self {
+            CommandName(s) | Variable(s) | NormalCode(s) | Description(s) | Text(s) => s.is_empty(),
+            Linebreak => false,
         }
     }
+}
 
-    ANSIStrings(&parts).to_string()
+/// Checks whether the characters right before and after the substring (given by half-open index interval) are whitespace (if they exist).
+fn is_freestanding_substring(surrouding: &str, substring: (usize, usize)) -> bool {
+    let (start, end) = substring;
+    // "okay" meaning <exists and is whitespace> or <doesn't exist>
+    let char_before_is_okay = surrouding[..start]
+        .chars()
+        .last()
+        .filter(|prev_char| !prev_char.is_whitespace())
+        .is_none();
+    let char_after_is_okay = surrouding[end..]
+        .chars()
+        .next()
+        .filter(|next_char| !next_char.is_whitespace())
+        .is_none();
+    char_before_is_okay && char_after_is_okay
+}
+
+/// Yields `NormalCode` and `CommandName` in alternating order according to the occurences of
+/// `command_name` in `segment`. Variables are not detected here, see `highlight_code`
+/// instead.
+fn highlight_code_segment<'a, E>(
+    command_name: &'a str,
+    mut segment: &'a str,
+    yield_snippet: &mut impl FnMut(HighlightingSnippet<'a>) -> Result<(), E>,
+) -> Result<(), E> {
+    if !command_name.is_empty() {
+        let mut search_start = 0;
+        while let Some(match_start) = segment.find_from(command_name, search_start) {
+            let match_end = match_start + command_name.len();
+            if is_freestanding_substring(segment, (match_start, match_end)) {
+                yield_snippet(HighlightingSnippet::NormalCode(&segment[..match_start]))?;
+                yield_snippet(HighlightingSnippet::CommandName(command_name))?;
+                segment = &segment[match_end..];
+                search_start = 0;
+            } else {
+                search_start = segment[match_start..]
+                    .char_indices()
+                    .nth(1)
+                    .map_or(segment.len(), |(i, _)| match_start + i);
+            }
+        }
+    }
+    yield_snippet(HighlightingSnippet::NormalCode(segment))?;
+    Ok(())
+}
+
+/// Highlight code examples including user variables in {{ curly braces }}.
+fn highlight_code<'a, E>(
+    command: &'a str,
+    text: &'a str,
+    yield_snippet: &mut impl FnMut(HighlightingSnippet<'a>) -> Result<(), E>,
+) -> Result<(), E> {
+    let variable_splits = text
+        .split("}}")
+        .map(|s| s.split_once("{{").unwrap_or((s, "")));
+    for (code_segment, variable) in variable_splits {
+        highlight_code_segment(&command, code_segment, yield_snippet)?;
+        yield_snippet(HighlightingSnippet::Variable(variable))?;
+    }
+    Ok(())
 }
 
 /// Print a token stream to an ANSI terminal.
 pub fn print_lines<T, R>(
     writer: &mut T,
     tokenizer: &mut Tokenizer<R>,
-    config: &Config,
+    style: &StyleConfig,
+    keep_empty_lines: bool,
 ) -> Result<(), TealdeerError>
 where
     T: Write,
     R: BufRead,
 {
     let mut command = String::new();
+    let mut yield_snippet = |snip: HighlightingSnippet<'_>| {
+        if snip.is_empty() {
+            Ok(())
+        } else {
+            print_snippet(writer, snip, style).map_err(|e| WriteError(e.to_string()))
+        }
+    };
     while let Some(token) = tokenizer.next_token() {
         match token {
             LineType::Empty => {
-                if !config.display.compact {
-                    writeln!(writer).map_err(|e| WriteError(e.to_string()))?;
+                if keep_empty_lines {
+                    yield_snippet(HighlightingSnippet::Linebreak)?;
                 }
             }
             LineType::Title(title) => {
@@ -89,20 +127,132 @@ where
                 command = title;
                 debug!("Detected command name: {}", &command);
             }
-            LineType::Description(text) => {
-                writeln!(writer, "  {}", config.style.description.paint(text))
-                    .map_err(|e| WriteError(e.to_string()))?;
-            }
-            LineType::ExampleText(text) => {
-                writeln!(writer, "  {}", config.style.example_text.paint(text))
-                    .map_err(|e| WriteError(e.to_string()))?;
-            }
+            LineType::Description(text) => yield_snippet(HighlightingSnippet::Description(&text))?,
+            LineType::ExampleText(text) => yield_snippet(HighlightingSnippet::Text(&text))?,
             LineType::ExampleCode(text) => {
-                writeln!(writer, "      {}", &format_code(&command, &text, &config))
-                    .map_err(|e| WriteError(e.to_string()))?;
+                yield_snippet(HighlightingSnippet::NormalCode("      "))?;
+                highlight_code(&command, &text, &mut yield_snippet)?;
+                yield_snippet(HighlightingSnippet::Linebreak)?;
             }
+
             LineType::Other(text) => debug!("Unknown line type: {:?}", text),
         }
     }
-    writeln!(writer).map_err(|e| WriteError(e.to_string()))
+    yield_snippet(HighlightingSnippet::Linebreak)?;
+    Ok(())
+}
+
+fn print_snippet(
+    writer: &mut impl Write,
+    snip: HighlightingSnippet<'_>,
+    style: &StyleConfig,
+) -> Result<(), io::Error> {
+    use HighlightingSnippet::*;
+
+    match snip {
+        CommandName(s) => write!(writer, "{}", style.command_name.paint(s)),
+        Variable(s) => write!(writer, "{}", style.example_variable.paint(s)),
+        NormalCode(s) => write!(writer, "{}", style.example_code.paint(s)),
+        Description(s) => writeln!(writer, "  {}", style.description.paint(s)),
+        Text(s) => writeln!(writer, "  {}", style.example_text.paint(s)),
+        Linebreak => writeln!(writer),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use HighlightingSnippet::*;
+
+    #[test]
+    fn test_is_freestanding_substring() {
+        assert!(is_freestanding_substring("I love tldr", (0, 1)));
+        assert!(is_freestanding_substring("I love tldr", (2, 6)));
+        assert!(is_freestanding_substring("I love tldr", (7, 11)));
+
+        assert!(is_freestanding_substring("tldr", (0, 4)));
+        assert!(is_freestanding_substring("tldr ", (0, 4)));
+        assert!(is_freestanding_substring(" tldr", (1, 5)));
+        assert!(is_freestanding_substring(" tldr ", (1, 5)));
+
+        assert!(!is_freestanding_substring("tldr", (1, 3)));
+        assert!(!is_freestanding_substring("tldr ", (1, 4)));
+        assert!(!is_freestanding_substring(" tldr", (1, 4)));
+
+        assert!(is_freestanding_substring(
+            " épicé ",
+            (1, " épicé".len()) // note the missing trailing space
+        ));
+        assert!(!is_freestanding_substring(
+            " épicé ",
+            (1, " épic".len()) // note the missing trailing space and character
+        ));
+    }
+
+    fn run<'a>(cmd: &'a str, segment: &'a str) -> Vec<HighlightingSnippet<'a>> {
+        let mut yielded = Vec::new();
+        let mut yield_snippet = |snip: HighlightingSnippet<'a>| {
+            if !snip.is_empty() {
+                yielded.push(snip);
+            }
+            Ok::<(), ()>(())
+        };
+
+        highlight_code_segment(cmd, segment, &mut yield_snippet)
+            .expect("highlight code segment failed");
+        yielded
+    }
+
+    #[test]
+    fn test_highlight_code_segment() {
+        assert!(run("make", "").is_empty());
+        assert_eq!(
+            &run("make", "make all CC=clang -q"),
+            &[CommandName("make"), NormalCode(" all CC=clang -q")]
+        );
+        assert_eq!(
+            &run("make", "  make money --always-make"),
+            &[
+                NormalCode("  "),
+                CommandName("make"),
+                NormalCode(" money --always-make")
+            ]
+        );
+        assert_eq!(
+            &run("git commit", "git commit -m 'git commit'"),
+            &[CommandName("git commit"), NormalCode(" -m 'git commit'"),]
+        );
+    }
+
+    #[test]
+    fn test_i18n() {
+        assert_eq!(
+            &run("mäke", "mäke höhlenrätselbücher"),
+            &[CommandName("mäke"), NormalCode(" höhlenrätselbücher")]
+        );
+        assert_eq!(
+            &run(
+                "Müll",
+                "1000 Gründe warum Müll heute größer ist als Müll früher, ärgerlich"
+            ),
+            &[
+                NormalCode("1000 Gründe warum "),
+                CommandName("Müll"),
+                NormalCode(" heute größer ist als "),
+                CommandName("Müll"),
+                NormalCode(" früher, ärgerlich")
+            ]
+        );
+        assert_eq!(
+            &run(
+                "übergang",
+                "die Zustandsübergangsfunktion übergang Änderungen",
+            ),
+            &[
+                NormalCode("die Zustandsübergangsfunktion "),
+                CommandName("übergang"),
+                NormalCode(" Änderungen")
+            ],
+        );
+    }
 }
