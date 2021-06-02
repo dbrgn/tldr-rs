@@ -362,6 +362,16 @@ fn test_rendering_color_never() {
     );
 }
 
+#[test]
+fn test_rendering_i18n() {
+    _test_correct_rendering(
+        include_str!("chmod.ru.md"),
+        "chmod.ru.md",
+        include_str!("chmod.ru.expected"),
+        "always",
+    );
+}
+
 /// An end-to-end integration test for rendering with custom syntax config.
 #[test]
 fn test_correct_rendering_with_config() {
