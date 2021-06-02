@@ -4,29 +4,29 @@
 
   [32mOpen an SVG file in the Inkscape GUI:[0m
 
-      [36minkscape [4mfilename.svg[0m[36m[0m
+[36m      [0m[36minkscape[0m[36m [0m[4;36mfilename.svg[0m
 
   [32mExport an SVG file into a bitmap with the default format (PNG) and the default resolution (90 DPI):[0m
 
-      [36minkscape [4mfilename.svg[0m[36m -e [4mfilename.png[0m[36m[0m
+[36m      [0m[36minkscape[0m[36m [0m[4;36mfilename.svg[0m[36m -e [0m[4;36mfilename.png[0m
 
   [32mExport an SVG file into a bitmap of 600x400 pixels (aspect ratio distortion may occur):[0m
 
-      [36minkscape [4mfilename.svg[0m[36m -e [4mfilename.png[0m[36m -w [4m600[0m[36m -h [4m400[0m[36m[0m
+[36m      [0m[36minkscape[0m[36m [0m[4;36mfilename.svg[0m[36m -e [0m[4;36mfilename.png[0m[36m -w [0m[4;36m600[0m[36m -h [0m[4;36m400[0m
 
   [32mExport a single object, given its ID, into a bitmap:[0m
 
-      [36minkscape [4mfilename.svg[0m[36m -i [4mid[0m[36m -e [4mobject.png[0m[36m[0m
+[36m      [0m[36minkscape[0m[36m [0m[4;36mfilename.svg[0m[36m -i [0m[4;36mid[0m[36m -e [0m[4;36mobject.png[0m
 
   [32mExport an SVG document to PDF, converting all texts to paths:[0m
 
-      [36minkscape [4mfilename.svg[0m[36m | inkscape | inkscape --export-pdf=[4minkscape.pdf[0m[36m | inkscape | inkscape --export-text-to-path[0m
+[36m      [0m[36minkscape[0m[36m [0m[4;36mfilename.svg[0m[36m | [0m[36minkscape[0m[36m | [0m[36minkscape[0m[36m --export-pdf=[0m[4;36minkscape.pdf[0m[36m | [0m[36minkscape[0m[36m | [0m[36minkscape[0m[36m --export-text-to-path[0m
 
   [32mDuplicate the object with id="path123", rotate the duplicate 90 degrees, save the file, and quit Inkscape:[0m
 
-      [36minkscape [4mfilename.svg[0m[36m --select=path123 --verb=EditDuplicate --verb=ObjectRotate90 --verb=FileSave --verb=FileQuit[0m
+[36m      [0m[36minkscape[0m[36m [0m[4;36mfilename.svg[0m[36m --select=path123 --verb=EditDuplicate --verb=ObjectRotate90 --verb=FileSave --verb=FileQuit[0m
 
   [32mSome invalid command just to test the correct highlighting of the command name:[0m
 
-      [36minkscape --use-inkscape=v3.0 file[0m
+[36m      [0m[36minkscape[0m[36m --use-inkscape=v3.0 file[0m
 
