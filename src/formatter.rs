@@ -1,13 +1,12 @@
 //! Functions related to formatting and printing lines from a `Tokenizer`.
 
-use std::io::{self, BufRead, Write};
+use std::io::{self, Write};
 
 use log::debug;
 
 use crate::config::StyleConfig;
 use crate::error::TealdeerError::{self, WriteError};
 use crate::extensions::FindFrom;
-use crate::tokenizer::Tokenizer;
 use crate::types::LineType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,15 +93,14 @@ fn highlight_code<'a, E>(
 }
 
 /// Print a token stream to an ANSI terminal.
-pub fn print_lines<T, R>(
+pub fn print_lines<T>(
     writer: &mut T,
-    tokenizer: &mut Tokenizer<R>,
+    lines: impl Iterator<Item = LineType>,
     style: &StyleConfig,
     keep_empty_lines: bool,
 ) -> Result<(), TealdeerError>
 where
     T: Write,
-    R: BufRead,
 {
     let mut command = String::new();
     let mut yield_snippet = |snip: HighlightingSnippet<'_>| {
@@ -112,8 +110,8 @@ where
             print_snippet(writer, snip, style).map_err(|e| WriteError(e.to_string()))
         }
     };
-    while let Some(token) = tokenizer.next_token() {
-        match token {
+    for line in lines {
+        match line {
             LineType::Empty => {
                 if keep_empty_lines {
                     yield_snippet(HighlightingSnippet::Linebreak)?;
@@ -123,7 +121,7 @@ where
                 debug!("Ignoring title");
 
                 // This is safe as long as the parsed title is only the command,
-                // and tokenizer yields values in order of appearance.
+                // and the iterator yields values in order of appearance.
                 command = title;
                 debug!("Detected command name: {}", &command);
             }

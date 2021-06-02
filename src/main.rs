@@ -36,7 +36,7 @@ mod config;
 mod error;
 pub mod extensions;
 mod formatter;
-mod tokenizer;
+mod line_iterator;
 mod types;
 
 use crate::cache::{Cache, PageLookupResult};
@@ -44,7 +44,7 @@ use crate::config::{get_config_dir, get_config_path, make_default_config, Config
 use crate::error::TealdeerError::ConfigError;
 use crate::extensions::Dedup;
 use crate::formatter::print_lines;
-use crate::tokenizer::Tokenizer;
+use crate::line_iterator::LineIterator;
 use crate::types::{ColorOptions, OsType};
 
 const NAME: &str = "tealdeer";
@@ -99,11 +99,9 @@ fn print_page(
                     .map_err(|_| "Could not write to stdout".to_string())?;
             }
         } else {
-            // Create tokenizer and print output
-            let mut tokenizer = Tokenizer::new(reader);
             print_lines(
                 &mut handle,
-                &mut tokenizer,
+                LineIterator::new(reader),
                 &config.style,
                 !config.display.compact,
             )
