@@ -1,16 +1,12 @@
 //! Functions related to formatting and printing lines from a `Tokenizer`.
 
-use std::io::{self, Write};
-
-use log::debug;
-
-use crate::config::StyleConfig;
-use crate::error::TealdeerError::{self, WriteError};
 use crate::extensions::FindFrom;
 use crate::types::LineType;
 
+use log::debug;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum HighlightingSnippet<'a> {
+pub enum HighlightingSnippet<'a> {
     CommandName(&'a str),
     Variable(&'a str),
     NormalCode(&'a str),
@@ -93,23 +89,16 @@ fn highlight_code<'a, E>(
 }
 
 /// Print a token stream to an ANSI terminal.
-pub fn print_lines<T>(
-    writer: &mut T,
-    lines: impl Iterator<Item = LineType>,
-    style: &StyleConfig,
+pub fn highlight_lines<L, F, E>(
+    lines: L,
+    yield_snippet: &mut F,
     keep_empty_lines: bool,
-) -> Result<(), TealdeerError>
+) -> Result<(), E>
 where
-    T: Write,
+    L: Iterator<Item = LineType>,
+    F: for<'snip> FnMut(HighlightingSnippet<'snip>) -> Result<(), E>,
 {
     let mut command = String::new();
-    let mut yield_snippet = |snip: HighlightingSnippet<'_>| {
-        if snip.is_empty() {
-            Ok(())
-        } else {
-            print_snippet(writer, snip, style).map_err(|e| WriteError(e.to_string()))
-        }
-    };
     for line in lines {
         match line {
             LineType::Empty => {
@@ -129,7 +118,7 @@ where
             LineType::ExampleText(text) => yield_snippet(HighlightingSnippet::Text(&text))?,
             LineType::ExampleCode(text) => {
                 yield_snippet(HighlightingSnippet::NormalCode("      "))?;
-                highlight_code(&command, &text, &mut yield_snippet)?;
+                highlight_code(&command, &text, yield_snippet)?;
                 yield_snippet(HighlightingSnippet::Linebreak)?;
             }
 
@@ -138,23 +127,6 @@ where
     }
     yield_snippet(HighlightingSnippet::Linebreak)?;
     Ok(())
-}
-
-fn print_snippet(
-    writer: &mut impl Write,
-    snip: HighlightingSnippet<'_>,
-    style: &StyleConfig,
-) -> Result<(), io::Error> {
-    use HighlightingSnippet::*;
-
-    match snip {
-        CommandName(s) => write!(writer, "{}", style.command_name.paint(s)),
-        Variable(s) => write!(writer, "{}", style.example_variable.paint(s)),
-        NormalCode(s) => write!(writer, "{}", style.example_code.paint(s)),
-        Description(s) => writeln!(writer, "  {}", style.description.paint(s)),
-        Text(s) => writeln!(writer, "  {}", style.example_text.paint(s)),
-        Linebreak => writeln!(writer),
-    }
 }
 
 #[cfg(test)]

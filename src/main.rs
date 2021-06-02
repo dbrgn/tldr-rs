@@ -15,13 +15,10 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::too_many_lines)]
 
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
+use std::env;
 use std::iter;
 use std::path::PathBuf;
 use std::process;
-use std::{env, io::Write};
 
 use ansi_term::{Color, Style};
 use app_dirs::AppInfo;
@@ -37,14 +34,14 @@ mod error;
 pub mod extensions;
 mod formatter;
 mod line_iterator;
+mod output;
 mod types;
 
 use crate::cache::{Cache, PageLookupResult};
 use crate::config::{get_config_dir, get_config_path, make_default_config, Config, MAX_CACHE_AGE};
 use crate::error::TealdeerError::ConfigError;
 use crate::extensions::Dedup;
-use crate::formatter::print_lines;
-use crate::line_iterator::LineIterator;
+use crate::output::print_page;
 use crate::types::{ColorOptions, OsType};
 
 const NAME: &str = "tealdeer";
@@ -77,43 +74,6 @@ struct Args {
     flag_markdown: bool,
     flag_color: ColorOptions,
     flag_language: Option<String>,
-}
-
-/// Print page by path
-fn print_page(
-    page: &PageLookupResult,
-    enable_markdown: bool,
-    config: &Config,
-) -> Result<(), String> {
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock();
-
-    for path in page.paths() {
-        let file = File::open(path).map_err(|msg| format!("Could not open file: {}", msg))?;
-        let reader = BufReader::new(file);
-
-        if enable_markdown {
-            // Print the raw markdown of the file.
-            for line in reader.lines() {
-                writeln!(handle, "{}", line.unwrap())
-                    .map_err(|_| "Could not write to stdout".to_string())?;
-            }
-        } else {
-            print_lines(
-                &mut handle,
-                LineIterator::new(reader),
-                &config.style,
-                !config.display.compact,
-            )
-            .map_err(|e| format!("Could not write to stdout: {}", e.message()))?;
-        };
-    }
-
-    handle
-        .flush()
-        .map_err(|_| "Could not flush stdout".to_string())?;
-
-    Ok(())
 }
 
 /// Set up display pager
