@@ -6,6 +6,7 @@ use crate::types::LineType;
 use log::debug;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Represents a snippet from a page from a specific highlighting class.
 pub enum HighlightingSnippet<'a> {
     CommandName(&'a str),
     Variable(&'a str),
@@ -26,69 +27,7 @@ impl<'a> HighlightingSnippet<'a> {
     }
 }
 
-/// Checks whether the characters right before and after the substring (given by half-open index interval) are whitespace (if they exist).
-fn is_freestanding_substring(surrouding: &str, substring: (usize, usize)) -> bool {
-    let (start, end) = substring;
-    // "okay" meaning <exists and is whitespace> or <doesn't exist>
-    let char_before_is_okay = surrouding[..start]
-        .chars()
-        .last()
-        .filter(|prev_char| !prev_char.is_whitespace())
-        .is_none();
-    let char_after_is_okay = surrouding[end..]
-        .chars()
-        .next()
-        .filter(|next_char| !next_char.is_whitespace())
-        .is_none();
-    char_before_is_okay && char_after_is_okay
-}
-
-/// Yields `NormalCode` and `CommandName` in alternating order according to the occurences of
-/// `command_name` in `segment`. Variables are not detected here, see `highlight_code`
-/// instead.
-fn highlight_code_segment<'a, E>(
-    command_name: &'a str,
-    mut segment: &'a str,
-    yield_snippet: &mut impl FnMut(HighlightingSnippet<'a>) -> Result<(), E>,
-) -> Result<(), E> {
-    if !command_name.is_empty() {
-        let mut search_start = 0;
-        while let Some(match_start) = segment.find_from(command_name, search_start) {
-            let match_end = match_start + command_name.len();
-            if is_freestanding_substring(segment, (match_start, match_end)) {
-                yield_snippet(HighlightingSnippet::NormalCode(&segment[..match_start]))?;
-                yield_snippet(HighlightingSnippet::CommandName(command_name))?;
-                segment = &segment[match_end..];
-                search_start = 0;
-            } else {
-                search_start = segment[match_start..]
-                    .char_indices()
-                    .nth(1)
-                    .map_or(segment.len(), |(i, _)| match_start + i);
-            }
-        }
-    }
-    yield_snippet(HighlightingSnippet::NormalCode(segment))?;
-    Ok(())
-}
-
-/// Highlight code examples including user variables in {{ curly braces }}.
-fn highlight_code<'a, E>(
-    command: &'a str,
-    text: &'a str,
-    yield_snippet: &mut impl FnMut(HighlightingSnippet<'a>) -> Result<(), E>,
-) -> Result<(), E> {
-    let variable_splits = text
-        .split("}}")
-        .map(|s| s.split_once("{{").unwrap_or((s, "")));
-    for (code_segment, variable) in variable_splits {
-        highlight_code_segment(&command, code_segment, yield_snippet)?;
-        yield_snippet(HighlightingSnippet::Variable(variable))?;
-    }
-    Ok(())
-}
-
-/// Print a token stream to an ANSI terminal.
+/// Parse the content of each line yielded by `lines` and yield `HighLightingSnippet`s accordingly.
 pub fn highlight_lines<L, F, E>(
     lines: L,
     yield_snippet: &mut F,
@@ -127,6 +66,68 @@ where
     }
     yield_snippet(HighlightingSnippet::Linebreak)?;
     Ok(())
+}
+
+/// Highlight code examples including user variables in {{ curly braces }}.
+fn highlight_code<'a, E>(
+    command: &'a str,
+    text: &'a str,
+    yield_snippet: &mut impl FnMut(HighlightingSnippet<'a>) -> Result<(), E>,
+) -> Result<(), E> {
+    let variable_splits = text
+        .split("}}")
+        .map(|s| s.split_once("{{").unwrap_or((s, "")));
+    for (code_segment, variable) in variable_splits {
+        highlight_code_segment(&command, code_segment, yield_snippet)?;
+        yield_snippet(HighlightingSnippet::Variable(variable))?;
+    }
+    Ok(())
+}
+
+/// Yields `NormalCode` and `CommandName` in alternating order according to the occurences of
+/// `command_name` in `segment`. Variables are not detected here, see `highlight_code`
+/// instead.
+fn highlight_code_segment<'a, E>(
+    command_name: &'a str,
+    mut segment: &'a str,
+    yield_snippet: &mut impl FnMut(HighlightingSnippet<'a>) -> Result<(), E>,
+) -> Result<(), E> {
+    if !command_name.is_empty() {
+        let mut search_start = 0;
+        while let Some(match_start) = segment.find_from(command_name, search_start) {
+            let match_end = match_start + command_name.len();
+            if is_freestanding_substring(segment, (match_start, match_end)) {
+                yield_snippet(HighlightingSnippet::NormalCode(&segment[..match_start]))?;
+                yield_snippet(HighlightingSnippet::CommandName(command_name))?;
+                segment = &segment[match_end..];
+                search_start = 0;
+            } else {
+                search_start = segment[match_start..]
+                    .char_indices()
+                    .nth(1)
+                    .map_or(segment.len(), |(i, _)| match_start + i);
+            }
+        }
+    }
+    yield_snippet(HighlightingSnippet::NormalCode(segment))?;
+    Ok(())
+}
+
+/// Checks whether the characters right before and after the substring (given by half-open index interval) are whitespace (if they exist).
+fn is_freestanding_substring(surrouding: &str, substring: (usize, usize)) -> bool {
+    let (start, end) = substring;
+    // "okay" meaning <exists and is whitespace> or <doesn't exist>
+    let char_before_is_okay = surrouding[..start]
+        .chars()
+        .last()
+        .filter(|prev_char| !prev_char.is_whitespace())
+        .is_none();
+    let char_after_is_okay = surrouding[end..]
+        .chars()
+        .next()
+        .filter(|next_char| !next_char.is_whitespace())
+        .is_none();
+    char_before_is_okay && char_after_is_okay
 }
 
 #[cfg(test)]
