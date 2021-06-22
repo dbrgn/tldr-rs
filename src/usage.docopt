@@ -17,6 +17,7 @@ Options:
     -m --markdown         Display the raw markdown instead of rendering it
     -q --quiet            Suppress informational messages
     --show-paths          Show file and directory paths used by tealdeer
+    --config <file>       Override config file location
     --config-path         Show config file path (deprecated)
     --seed-config         Create a basic config
     --color <when>        Control when to use color [always, auto, never] [default: auto]

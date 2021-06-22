@@ -112,6 +112,8 @@ pub enum PathSource {
     #[allow(dead_code)] // Waiting for Pull Request #141
     /// Config file variable
     ConfigVar,
+    /// CLI argument override
+    Override,
 }
 
 impl fmt::Display for PathSource {
@@ -123,6 +125,7 @@ impl fmt::Display for PathSource {
                 Self::OsConvention => "OS convention",
                 Self::EnvVar => "env variable",
                 Self::ConfigVar => "config file variable",
+                Self::Override => "override by flag",
             }
         )
     }

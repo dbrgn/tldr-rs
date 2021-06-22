@@ -258,11 +258,11 @@ fn map_io_err_to_config_err(e: IoError) -> TealdeerError {
 }
 
 impl Config {
-    pub fn load(enable_styles: bool) -> Result<Self, TealdeerError> {
+    pub fn load(custom_path: Option<&str>, enable_styles: bool) -> Result<Self, TealdeerError> {
         debug!("Loading config");
 
         // Determine path
-        let (config_file_path, _) = get_config_path()
+        let (config_file_path, _) = get_config_path(custom_path)
             .map_err(|e| ConfigError(format!("Could not determine config path: {}", e)))?;
 
         // Load raw config
@@ -324,33 +324,44 @@ pub fn get_config_dir() -> Result<(PathBuf, PathSource), TealdeerError> {
 ///
 /// Note that this function does not verify whether the file at that location
 /// exists, or is a file.
-pub fn get_config_path() -> Result<(PathBuf, PathSource), TealdeerError> {
+pub fn get_config_path(custom_path: Option<&str>) -> Result<(PathBuf, PathSource), TealdeerError> {
+    custom_path.map_or_else(get_default_config_path, |path| {
+        Ok((path.into(), PathSource::Override))
+    })
+}
+
+/// Returns the path to the default config file location.
+pub fn get_default_config_path() -> Result<(PathBuf, PathSource), TealdeerError> {
     let (config_dir, source) = get_config_dir()?;
     let config_file_path = config_dir.join(CONFIG_FILE_NAME);
     Ok((config_file_path, source))
 }
 
-/// Create default config file.
-pub fn make_default_config() -> Result<PathBuf, TealdeerError> {
-    let (config_dir, _) = get_config_dir()?;
+/// Create default config file. Pass `None` to create at default location.
+pub fn make_default_config(path: Option<&str>) -> Result<PathBuf, TealdeerError> {
+    let config_file_path = if let Some(s) = path {
+        PathBuf::from(s)
+    } else {
+        let (config_dir, _) = get_config_dir()?;
 
-    // Ensure that config directory exists
-    if !config_dir.exists() {
-        if let Err(e) = fs::create_dir_all(&config_dir) {
+        // Ensure that config directory exists
+        if !config_dir.exists() {
+            if let Err(e) = fs::create_dir_all(&config_dir) {
+                return Err(ConfigError(format!(
+                    "Could not create config directory: {}",
+                    e
+                )));
+            }
+        } else if !config_dir.is_dir() {
             return Err(ConfigError(format!(
-                "Could not create config directory: {}",
-                e
+                "Config directory could not be created: {} already exists but is not a directory",
+                config_dir.to_string_lossy(),
             )));
         }
-    } else if !config_dir.is_dir() {
-        return Err(ConfigError(format!(
-            "Config directory could not be created: {} already exists but is not a directory",
-            config_dir.to_string_lossy(),
-        )));
-    }
 
+        config_dir.join(CONFIG_FILE_NAME)
+    };
     // Ensure that a config file doesn't get overwritten
-    let config_file_path = config_dir.join(CONFIG_FILE_NAME);
     if config_file_path.is_file() {
         return Err(ConfigError(format!(
             "A configuration file already exists at {}, no action was taken.",
