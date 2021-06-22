@@ -32,37 +32,38 @@ High level project goals:
 - [x] Download and cache pages
 - [x] Don't require a network connection for anything besides updating the cache
 - [x] Command line interface similar or equivalent to the [NodeJS client][tldr-node-client]
+- [x] Comply with the [tldr client specification][client-spec]
+- [x] Advanced highlighting and configuration
 - [x] Be fast
 
-A tool like `tldr` should be as frictionless as possible to use. It should be
-easy to invoke (just `tldr tar`, not using another subcommand like `tldr find
-tar`) and it should show the output as fast as possible.
+A tool like `tldr` should be as frictionless as possible to use and show the
+output as fast as possible.
 
-tealdeer reaches these goals. During a (highly non-scientific) test (see
-[#38](https://github.com/dbrgn/tealdeer/issues/38) for details), I tested the
-invocation speed of `tldr <command>` for a few of the existing clients:
+We think that `tealdeer` reaches these goals. We put together a (more or less)
+reproducible benchmark that compiles a handful of clients from source and
+measures the execution times on a cold disk cache. The benchmarking is run in a
+Docker container using sharkdp's [`hyperfine`][hyperfine-gh]
+([Dockerfile][benchmark-dockerfile]).
 
-| Client | Times (ms) | Avg of 5 (ms) |
-| --- | --- | --- |
-| [Tealdeer](https://github.com/dbrgn/tealdeer/) | `15/11/5/5/11` | `9.4` (100%) |
-| [C client](https://github.com/tldr-pages/tldr-cpp-client) | `11/5/12/11/15` | `10.8` (115%) |
-| [Bash client](https://github.com/pepa65/tldr-bash-client) | `15/19/22/25/24` | `21.0` (223%) |
-| [Go client by k3mist](https://github.com/k3mist/tldr/) | `98/96/100/95/101` | `98.8` (1'051%) |
-| [Python client](https://github.com/lord63/tldr.py) | `152/148/151/158/140` | `149.8` (1'594%) |
-| [NodeJS client](https://github.com/tldr-pages/tldr-node-client) | `169/171/170/170/170` | `170.0` (1'809%) |
+| Client (500 runs)                     | Mean in ms | Deviation in ms | Comments                |
+| :---:                                 | :---:      | :---:           | :---:                   |
+| `tealdeer`                            | 17.6       | 1.2             |                         |
+| [`tldr-c`][c-gh]                      | 36.6       | 2.3             |                         |
+| [`tldr-hs`][hs-gh]                    | 22.7       | 2.2             | no example highlighting |
+| [`fast-tldr (Haskell)`][fast-tldr-gh] | 14.8       | 1.3             | no example highlighting |
+| [`tldr-bash`][bash-gh]                | 27.8       | 1.1             |                         |
+| [`outfieldr (Zig)`][outfieldr-gh]     | 7.9        | 1.0             | no user configuration   |
 
-tealdeer was the winner here, although the C client and the Bash client are in
-the same speed class. Interpreted languages are clearly much slower to invoke,
-a delay of 170 milliseconds is definitely noticeable and increases friction for
-the user.
+As you can see, `tealdeer` is not the fastest of the tested clients anymore. We
+strive for useful features and code quality over raw performance, even if that
+means that we don't come out on top in this friendly competition. That said, we
+are still optimizing the code, for example when the `outfieldr` developers
+[suggested to switch][outfieldr-comment-tls] to a native TLS implementation
+instead of the native libraries.
 
-These are the clients I tried but failed to compile or run:
-[Haskell client](https://github.com/psibi/tldr-hs),
-[Ruby client](https://github.com/YellowApple/tldrb),
-[Perl client](https://github.com/skaji/perl-tldr),
-[Go client by anoopengineer](https://github.com/anoopengineer/tldr/),
-[PHP client](https://github.com/BrainMaestro/tldr-php).
-
+We also benchmarked the [NodeJS client][tldr-node-client], but it is an order of
+magnitude slower than all of the above. In a smaller benchmark with 50 runs, the
+mean execution time was 520ms.
 
 ## Development
 
@@ -114,6 +115,16 @@ Thanks to @severen for coming up with the name "tealdeer"!
 
 
 [tldr-node-client]: https://github.com/tldr-pages/tldr-node-client
+[c-gh]: https://github.com/tldr-pages/tldr-c-client
+[hs-gh]: https://github.com/psibi/tldr-hs
+[fast-tldr-gh]: https://github.com/gutjuri/fast-tldr
+[bash-gh]: https://4e4.win/tldr
+[outfieldr-gh]: https://gitlab.com/ve-nt/outfieldr
+
+[benchmark-dockerfile]: https://github.com/dbrgn/tealdeer/blob/master/benchmarks/Dockerfile
+[client-spec]: https://github.com/tldr-pages/tldr/blob/main/CLIENT-SPECIFICATION.md
+[hyperfine-gh]: https://github.com/sharkdp/hyperfine
+[outfieldr-comment-tls]: https://github.com/dbrgn/tealdeer/issues/129#issuecomment-833596765
 
 <!-- Badges -->
 [github-actions]: https://github.com/dbrgn/tealdeer/actions?query=branch%3Amaster
