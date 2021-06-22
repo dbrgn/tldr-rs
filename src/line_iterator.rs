@@ -1,4 +1,4 @@
-//! Code to tokenize a `BufRead` instance into an iterator of `LineType`s.
+//! Code to split a `BufRead` instance into an iterator of `LineType`s.
 
 use std::io::BufRead;
 
@@ -15,13 +15,13 @@ pub enum TldrFormat {
     V2,
 }
 
-/// A tokenizer is initialized with a `BufReader` instance that contains the
-/// entire Tldr page. It then returns tokens as `Option<LineType>`.
+/// A `LineIterator` is initialized with a `BufReader` instance that contains the
+/// entire Tldr page. It then implements `Iterator<Item = LineType>`.
 #[derive(Debug)]
-pub struct Tokenizer<R: BufRead> {
+pub struct LineIterator<R: BufRead> {
     /// An instance of `R: BufRead`.
     reader: R,
-    /// Whether the first line has already been tokenized or not.
+    /// Whether the first line has already been processed or not.
     first_line: bool,
     /// Buffer for the current line. Used internally.
     current_line: String,
@@ -29,7 +29,7 @@ pub struct Tokenizer<R: BufRead> {
     format: TldrFormat,
 }
 
-impl<R> Tokenizer<R>
+impl<R> LineIterator<R>
 where
     R: BufRead,
 {
@@ -41,38 +41,40 @@ where
             format: TldrFormat::Undecided,
         }
     }
+}
 
-    pub fn next_token(&mut self) -> Option<LineType> {
+impl<R: BufRead> Iterator for LineIterator<R> {
+    type Item = LineType;
+
+    fn next(&mut self) -> Option<LineType> {
         self.current_line.clear();
         let bytes_read = self.reader.read_line(&mut self.current_line);
         match bytes_read {
             Ok(0) => None,
             Err(e) => {
-                warn!("Could not read line from token reader: {:?}", e);
+                warn!("Could not read line from reader: {:?}", e);
                 None
             }
             Ok(_) => {
                 // Handle new titles
-                if self.first_line && !self.current_line.starts_with('#') {
-                    // It's the new format! Drop next line.
-                    // (Hmm, is there a way to do this without an allocation?)
-                    let mut devnull = String::new();
-                    if let Err(e) = self.reader.read_line(&mut devnull) {
-                        warn!("Could not read line from token reader: {:?}", e);
-                        return None;
-                    }
-                    self.first_line = false;
-                    self.format = TldrFormat::V2;
-                    return Some(LineType::Title(self.current_line.trim_end().to_string()));
-                }
-
                 if self.first_line {
-                    // Clear `first_line` flag
-                    self.first_line = false;
-
-                    // It's the old format.
-                    self.format = TldrFormat::V1;
+                    if self.current_line.starts_with('#') {
+                        // It's the old format.
+                        self.format = TldrFormat::V1;
+                    } else {
+                        // It's the new format! Drop next line.
+                        // (Hmm, is there a way to do this without an allocation?)
+                        let mut devnull = String::new();
+                        if let Err(e) = self.reader.read_line(&mut devnull) {
+                            warn!("Could not read line from reader: {:?}", e);
+                            return None;
+                        }
+                        self.first_line = false;
+                        self.format = TldrFormat::V2;
+                        return Some(LineType::Title(self.current_line.trim_end().to_string()));
+                    }
                 }
+                self.first_line = false;
 
                 // Convert line to a `LineType` instance
                 match self.format {
@@ -87,26 +89,26 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::Tokenizer;
+    use super::LineIterator;
     use crate::types::LineType;
 
     #[test]
     fn test_first_line_old_format() {
         let input = "# The Title\n\n";
-        let mut tokenizer = Tokenizer::new(input.as_bytes());
-        let title = tokenizer.next_token().unwrap();
+        let mut lines = LineIterator::new(input.as_bytes());
+        let title = lines.next().unwrap();
         assert_eq!(title, LineType::Title("The Title".to_string()));
-        let empty = tokenizer.next_token().unwrap();
+        let empty = lines.next().unwrap();
         assert_eq!(empty, LineType::Empty);
     }
 
     #[test]
     fn test_first_line_new_format() {
         let input = "The Title\n=========\n\n";
-        let mut tokenizer = Tokenizer::new(input.as_bytes());
-        let title = tokenizer.next_token().unwrap();
+        let mut lines = LineIterator::new(input.as_bytes());
+        let title = lines.next().unwrap();
         assert_eq!(title, LineType::Title("The Title".to_string()));
-        let empty = tokenizer.next_token().unwrap();
+        let empty = lines.next().unwrap();
         assert_eq!(empty, LineType::Empty);
     }
 }

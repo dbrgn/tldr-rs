@@ -10,17 +10,15 @@
 
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::similar_names)]
+#![allow(clippy::enum_glob_use)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::similar_names)]
 #![allow(clippy::too_many_lines)]
 
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
+use std::env;
 use std::iter;
 use std::path::PathBuf;
 use std::process;
-use std::{env, io::Write};
 
 use ansi_term::{Color, Style};
 use app_dirs::AppInfo;
@@ -32,18 +30,18 @@ use serde_derive::Deserialize;
 
 mod cache;
 mod config;
-mod dedup;
 mod error;
+pub mod extensions;
 mod formatter;
-mod tokenizer;
+mod line_iterator;
+mod output;
 mod types;
 
 use crate::cache::{Cache, PageLookupResult};
 use crate::config::{get_config_dir, get_config_path, make_default_config, Config, MAX_CACHE_AGE};
-use crate::dedup::Dedup;
 use crate::error::TealdeerError::ConfigError;
-use crate::formatter::print_lines;
-use crate::tokenizer::Tokenizer;
+use crate::extensions::Dedup;
+use crate::output::print_page;
 use crate::types::{ColorOptions, OsType};
 
 const NAME: &str = "tealdeer";
@@ -76,40 +74,6 @@ struct Args {
     flag_markdown: bool,
     flag_color: ColorOptions,
     flag_language: Option<String>,
-}
-
-/// Print page by path
-fn print_page(
-    page: &PageLookupResult,
-    enable_markdown: bool,
-    config: &Config,
-) -> Result<(), String> {
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock();
-
-    for path in page.paths() {
-        let file = File::open(path).map_err(|msg| format!("Could not open file: {}", msg))?;
-        let reader = BufReader::new(file);
-
-        if enable_markdown {
-            // Print the raw markdown of the file.
-            for line in reader.lines() {
-                writeln!(handle, "{}", line.unwrap())
-                    .map_err(|_| "Could not write to stdout".to_string())?;
-            }
-        } else {
-            // Create tokenizer and print output
-            let mut tokenizer = Tokenizer::new(reader);
-            print_lines(&mut handle, &mut tokenizer, &config)
-                .map_err(|e| format!("Could not write to stdout: {}", e.message()))?;
-        };
-    }
-
-    handle
-        .flush()
-        .map_err(|_| "Could not flush stdout".to_string())?;
-
-    Ok(())
 }
 
 /// Set up display pager

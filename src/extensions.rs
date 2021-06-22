@@ -18,3 +18,16 @@ impl<T: PartialEq + Clone> Dedup<T> for Vec<T> {
         }
     }
 }
+
+/// Like `str::find`, but starts searching at `start`.
+pub(crate) trait FindFrom {
+    fn find_from(&self, needle: &Self, start: usize) -> Option<usize>;
+}
+
+impl FindFrom for str {
+    fn find_from(&self, needle: &Self, start: usize) -> Option<usize> {
+        self.get(start..)
+            .and_then(|s| s.find(needle))
+            .map(|i| i + start)
+    }
+}
