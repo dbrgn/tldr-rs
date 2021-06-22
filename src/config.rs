@@ -151,15 +151,19 @@ impl Default for RawUpdatesConfig {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct RawDirectoriesConfig {
     #[serde(default)]
-    pub custom_pages_dir: Option<PathBuf>,
+    pub custom_pages_dir: PathBuf,
 }
 
 impl Default for RawDirectoriesConfig {
     fn default() -> Self {
         Self {
-            custom_pages_dir: get_app_root(AppDataType::UserData, &crate::APP_INFO)
-                .map(|path| path.join("pages"))
-                .ok(),
+            custom_pages_dir: get_app_root(AppDataType::UserData, &crate::APP_INFO).map_or_else(
+                |_| {
+                    eprintln!("Could not locate the App Root");
+                    std::process::exit(1);
+                },
+                |p| p.join("pages"),
+            ),
         }
     }
 }
@@ -214,7 +218,7 @@ pub struct UpdatesConfig {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DirectoriesConfig {
-    pub custom_pages_dir: Option<PathBuf>,
+    pub custom_pages_dir: PathBuf,
 }
 
 #[derive(Clone, Debug, PartialEq)]

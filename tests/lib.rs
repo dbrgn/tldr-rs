@@ -230,9 +230,45 @@ fn test_setup_seed_config() {
         .stderr(contains("Successfully created seed config file here"));
 }
 
+/// This test is to show that there is a default path for custom_pages_dir if it is not defined in
+/// the config.toml
+#[test]
+fn test_show_paths_custom_pages_not_in_config() {
+    use app_dirs::{get_app_root, AppDataType, AppInfo};
+
+    let testenv = TestEnv::new();
+    testenv
+        .command()
+        .args(&["--show-paths"])
+        .assert()
+        .success()
+        .stdout(contains(format!(
+            "Custom pages dir: {}",
+            get_app_root(
+                AppDataType::UserData,
+                &AppInfo {
+                    name: "tealdeer",
+                    author: "tealdeer"
+                }
+            )
+            .expect("get_app_root failed, this should never happen...")
+            .join("pages")
+            .to_str()
+            .expect(
+                "path returned from get_app_root was not valid UTF-8, this should never happen..."
+            )
+        )));
+}
+
 #[test]
 fn test_show_paths() {
     let testenv = TestEnv::new();
+
+    // Set custom pages directory
+    testenv.write_config(format!(
+        "[directories]\ncustom_pages_dir = '{}'",
+        testenv.custom_pages_dir.path().to_str().unwrap()
+    ));
 
     testenv
         .command()
@@ -240,11 +276,11 @@ fn test_show_paths() {
         .assert()
         .success()
         .stdout(contains(format!(
-            "Config dir:  {}",
+            "Config dir:       {}",
             testenv.config_dir.path().to_str().unwrap(),
         )))
         .stdout(contains(format!(
-            "Config path: {}",
+            "Config path:      {}",
             testenv
                 .config_dir
                 .path()
@@ -253,17 +289,21 @@ fn test_show_paths() {
                 .unwrap(),
         )))
         .stdout(contains(format!(
-            "Cache dir:   {}",
+            "Cache dir:        {}",
             testenv.cache_dir.path().to_str().unwrap(),
         )))
         .stdout(contains(format!(
-            "Pages dir:   {}",
+            "Pages dir:        {}",
             testenv
                 .cache_dir
                 .path()
                 .join("tldr-master")
                 .to_str()
                 .unwrap(),
+        )))
+        .stdout(contains(format!(
+            "Custom pages dir: {}",
+            testenv.custom_pages_dir.path().to_str().unwrap(),
         )));
 }
 

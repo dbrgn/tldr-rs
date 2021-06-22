@@ -18,7 +18,7 @@ use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::iter;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::{env, io::Write};
 
@@ -201,7 +201,7 @@ fn show_config_path() {
 }
 
 /// Show file paths
-fn show_paths() {
+fn show_paths(custom_pages_dir: impl AsRef<Path>) {
     let config_dir = get_config_dir().map_or_else(
         |e| format!("[Error: {}]", e),
         |(mut path, source)| {
@@ -236,10 +236,13 @@ fn show_paths() {
                 .unwrap_or_else(|_| String::from("[Invalid]"))
         },
     );
-    println!("Config dir:  {}", config_dir);
-    println!("Config path: {}", config_path);
-    println!("Cache dir:   {}", cache_dir);
-    println!("Pages dir:   {}", pages_dir);
+    let custom_pages_dir = custom_pages_dir.as_ref().to_str().unwrap_or("[Invalid]");
+
+    println!("Config dir:       {}", config_dir);
+    println!("Config path:      {}", config_path);
+    println!("Cache dir:        {}", cache_dir);
+    println!("Pages dir:        {}", pages_dir);
+    println!("Custom pages dir: {}", custom_pages_dir);
 }
 
 /// Create seed config file and exit
@@ -360,15 +363,6 @@ fn main() {
         process::exit(0);
     }
 
-    // Show config file and path, pass through
-    if args.flag_config_path {
-        eprintln!("Warning: The --config-path flag is deprecated, use --show-paths instead");
-        show_config_path();
-    }
-    if args.flag_show_paths {
-        show_paths();
-    }
-
     // Create a basic config and exit
     if args.flag_seed_config {
         create_config_and_exit();
@@ -406,6 +400,15 @@ fn main() {
             process::exit(1);
         }
     };
+
+    // Show config file and path, pass through
+    if args.flag_config_path {
+        eprintln!("Warning: The --config-path flag is deprecated, use --show-paths instead");
+        show_config_path();
+    }
+    if args.flag_show_paths {
+        show_paths(&config.directories.custom_pages_dir);
+    }
 
     if args.flag_pager || config.display.use_pager {
         configure_pager();
@@ -476,11 +479,9 @@ fn main() {
             .map_or_else(get_languages_from_env, |flag_lang| vec![flag_lang]);
 
         // Search for command in cache
-        if let Some(page) = cache.find_page(
-            &command,
-            &languages,
-            config.directories.custom_pages_dir.as_deref(),
-        ) {
+        if let Some(page) =
+            cache.find_page(&command, &languages, &config.directories.custom_pages_dir)
+        {
             if let Err(msg) = print_page(&page, args.flag_markdown, &config) {
                 eprintln!("{}", msg);
                 process::exit(1);
