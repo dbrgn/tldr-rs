@@ -1,0 +1,97 @@
+on:
+  push:
+    tags:
+      - "v*" # push events to matching v*, i.e. v1.0, v20.15.10
+
+jobs:
+  completions-upload:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: ["bash", "fish", "zsh"]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Upload
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          sudo apt update && sudo apt install -y jq
+          source ./upload-asset.sh
+
+          upload_release_file ${{ secrets.GITHUB_TOKEN }} ${{ github.repository }} ${{ matrix.target }}_tealdeer completions_${{ matrix.target }}
+
+  license-upload:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: ["MIT", "APACHE"]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Upload
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          sudo apt update && sudo apt install -y jq
+          source ./upload-asset.sh
+
+          upload_release_file ${{ secrets.GITHUB_TOKEN }} ${{ github.repository }} LICENSE-${{ matrix.target }} LICENSE-${{ matrix.target }}
+
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: "x86_64"
+            libc: "musl"
+          - arch: "i686"
+            libc: "musl"
+          - arch: "armv7"
+            libc: "musleabihf"
+          - arch: "arm"
+            libc: "musleabi"
+          - arch: "arm"
+            libc: "musleabihf"
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Docker Pull
+        run: docker pull messense/rust-musl-cross:${{ matrix.arch }}-${{ matrix.libc }}
+      - name: Build with Docker
+        run: docker run --rm -i -v "$(pwd)":/home/rust/src messense/rust-musl-cross:${{ matrix.arch }}-${{ matrix.libc }} cargo build --release
+      - name: Stripping
+        run: docker run --rm -i -v "$(pwd)":/home/rust/src messense/rust-musl-cross:${{ matrix.arch }}-${{ matrix.libc }} musl-strip -s /home/rust/src/target/${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}/release/tldr
+      - uses: actions/upload-artifact@v2
+        with:
+          name: "tldr-linux-${{ matrix.arch }}-${{ matrix.libc }}"
+          path: "target/${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}/release/tldr"
+
+  build-darwin:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target x86_64-apple-darwin
+      - uses: actions/upload-artifact@v2
+        with:
+          name: "tldr-apple-darwin-x86_64"
+          path: "target/x86_64-apple-darwin/release/tldr"
+
+  release-upload:
+    needs:
+      - build-linux
+      - build-darwin
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: ["linux-x86_64-musl", "linux-i686-musl", "linux-armv7-musleabihf", "linux-arm-musleabi", "linux-arm-musleabihf", "apple-darwin-x86_64"]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/download-artifact@v2
+      - name: Upload
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          sudo apt update && sudo apt install -y jq
+          source ./upload-asset.sh
+
+          upload_release_file ${{ secrets.GITHUB_TOKEN }} ${{ github.repository }} tldr-${{ matrix.target }}/tldr tldr-${{ matrix.target }}
